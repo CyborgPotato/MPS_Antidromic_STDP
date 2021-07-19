@@ -1,0 +1,2 @@
+from scipy.integrate import odeint
+from sc
