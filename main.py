@@ -1,6 +1,6 @@
 from scipy.integrate import odeint
 from numpy import linspace
-from math import pi, sin
+from math import pi, sin, exp
 from matplotlib.pyplot import *
 
 # class compartment:
@@ -20,7 +20,7 @@ from matplotlib.pyplot import *
 
 #     def __init__(self,comparts):
 def inj(t):
-    return ((t>1000 and t<1500) or (t>2000 and t<2500))*0.0001#*(sin(t/(2*pi*10)+1))
+    return ((t>1000 and t<1500) or (t>2000 and t<2500))*0.01#*(sin(t/(2*pi*10)+1))
 
 AM=22
 BM=13
@@ -34,45 +34,38 @@ BQ=0.025
 def ddt(V,t,p):
     # V[0] = dendrite voltage
     # V[1] = Soma Voltage
-    # V[2] = m/dt
-    # V[3] = h/dt
-    # V[4] = n/dt
-    # V[5] = q/dt
-    if not p.state and V[1]>0.01:
+
+    if not p.state and V[1]>0:
         p.state = True
-    if p.state:#p.threshold:
-        a_m=AM
-        b_m=0
-        a_h=0
-        b_h=BH
-        a_n=AN
-        b_n=0
-        a_q=AQ
-        b_q=0
         if (t-p.t0>0.6):
             # print(f"{t} : {p.t0}")
             p.state=False
-    else:
-        a_m=0
-        b_m=BM
-        a_h=AH
-        b_h=0
-        a_n=0
-        b_n=BN
-        a_q=0
-        b_q=BQ
+        p.m0=p.m
+        p.h0=p.h
+        p.n0=p.n
+        p.q0=p.q
 
-    Iion = p.gNa * V[2]**3 * V[3]*(V[1]-p.ENa) +\
-           p.gKf * V[4]**4 * (V[1]-p.EK) +\
-           p.gKs * V[5]**2 * (V[1]-p.EK)
+
+    def gateVal(alpha,beta,v0):
+        # public double getValueOn(double t) 
+    	# value = v0 * Math.exp(-beta*(t - t0));
+        # public double getValueOff(double t) 
+    	# value = 1 + (v0 - 1) * Math.exp(-alpha*(t - t0));
+        return (p.state)*(v0 * exp(-beta*(t - p.t0))) + \
+            (not p.state)*(1 + (v0 - 1) * exp(-alpha*(t - p.t0)))
+
+    p.m = gateVal(AM,BM,p.m0)
+    p.h = gateVal(AH,BH,p.h0)
+    p.n = gateVal(AN,BN,p.n0)
+    p.q = gateVal(AQ,BQ,p.q0)
+    
+    Iion = p.gNa * p.m**3 * p.h*(V[1]-p.ENa) +\
+           p.gKf * p.n**4 * (V[1]-p.EK) +\
+           p.gKs * p.q**2 * (V[1]-p.EK)
         
     dVdt = [
         (-p.Isyn_d-p.gld*(V[0]-p.El)-p.gc*(V[0]-V[1])+p.Iinj_d(t))/p.Cd,
-        (-p.Isyn_s-p.gls*(V[1]-p.El)-p.gc*(V[1]-V[0])-Iion+p.Iinj_s(t))/p.Cs,
-        a_m*(1-V[2])-b_h*V[2],
-        a_h*(1-V[3])-b_h*V[3],
-        a_n*(1-V[4])-b_n*V[4],
-        a_q*(1-V[5])-b_q*V[5]
+        (-p.Isyn_s-p.gls*(V[1]-p.El)-p.gc*(V[1]-V[0])-Iion+p.Iinj_s(t))/p.Cs
     ]
     # print(dVdt[0])
     return dVdt
@@ -83,8 +76,14 @@ class Object(object):
 p = Object()
 
 # Whether pulse is active
-p.state=False
+p.state=True
 p.t0=0 # time of last pulse
+
+# m,h,n,q values at pulse
+p.m0=0
+p.h0=0
+p.n0=0
+p.q0=0
 
 # Sodium parameters
 p.ENa=120 #equilibrium
@@ -150,10 +149,8 @@ p.Cm=1 # Memrane specific capacitance
 p.Cd=2*pi*p.rd*p.ld*p.Cm # dendrite capacitance
 p.Cs=2*pi*p.rs*p.ls*p.Cm # soma capacitance
 
-sol = odeint(ddt,[0,0,0,0,0,0],linspace(0,tstop,int(tstop/dt)),args=(p,))
+sol = odeint(ddt,[0,0],linspace(0,tstop,int(tstop/dt)),args=(p,))
 
 plot(sol[:,0])
 plot(sol[:,1])
-show()
-plot(sol[:,2:])
 show()
