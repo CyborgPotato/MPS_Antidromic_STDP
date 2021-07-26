@@ -20,7 +20,7 @@ from matplotlib.pyplot import *
 
 #     def __init__(self,comparts):
 def inj(t):
-    return ((t>1000 and t<1500) or (t>2000 and t<2500))*0.001#*(sin(t/(2*pi*10)+1))
+    return ((t>1000 and t<1500) or (t>2000 and t<2500))*0.0001#*(sin(t/(2*pi*10)+1))
 
 AM=22
 BM=13
@@ -31,7 +31,7 @@ BN=0.1
 AQ=1.5
 BQ=0.025
 
-def ddt(t,V):
+def ddt(slope,t,V):
     # V[0] = dendrite voltage
     # V[1] = Soma Voltage
     ison=True
@@ -46,6 +46,8 @@ def ddt(t,V):
                 (not ison)*(1 + (v0 - 1) * exp(-alpha*(t - p.t0)))
         except OverflowError:
             print(f"{alpha}, {beta}, {v0}, {t}, {p.t0}")
+        # if (t>900):
+            # print(t-p.t0)
         return ret
 
     if ( p.state ):
@@ -56,7 +58,7 @@ def ddt(t,V):
            p.n0=p.n
            p.q0=p.q
            p.state=False
-    	   
+           print("State change")
            ison=True;
        else:
     	   ison=False;
@@ -64,9 +66,13 @@ def ddt(t,V):
     	ison=True;
 
     if V[1]>p.threshold:
+        p.t0=t
+        p.m0=p.m
+        p.h0=p.h
+        p.n0=p.n
+        p.q0=p.q
         p.state = True
 
-    print(t)
     p.m = gateVal(AM,BM,p.m0)
     p.h = gateVal(AH,BH,p.h0)
     p.n = gateVal(AN,BN,p.n0)
@@ -76,11 +82,15 @@ def ddt(t,V):
            p.gKf * p.n**4 * (V[1]-p.EK) +\
            p.gKs * p.q**2 * (V[1]-p.EK)
         
-    dVdt = [
+    dVdt = np.array([
         (-p.Isyn_d-p.gld*(V[0]-p.El)-p.gc*(V[0]-V[1])+p.Iinj_d(t))/p.Cd,
         (-p.Isyn_s-p.gls*(V[1]-p.El)-p.gc*(V[1]-V[0])-Iion+p.Iinj_s(t))/p.Cs
-    ]
-    # print(dVdt[0])
+    ])
+    
+    if (dVdt[0]>1e5):
+        print(f"{dVdt[0]}, {Iion}")
+        print(f"{p.m},{p.h},{p.n},{p.q}")
+        print("")
     return dVdt
 
 
@@ -114,8 +124,8 @@ p.gKs=16  # mS/cm^2 maximal slow conductance
 p.El=0    # mV equilibrium leak
 
 # Resistance of dendrite and soma
-p.Rmd=12350 #Ohm cm^2
-p.Rms=1075  #Ohm cm^2
+p.Rmd=12350/1000 #Ohm cm^2
+p.Rms=1075/1000  #Ohm cm^2
 # length of dendrite and soma
 p.ld=5800   #um 5519-6789
 p.ls=79     #um 77.5-82.5
@@ -136,7 +146,7 @@ p.rs=p.ls/1000
 p.gld= (2*pi*p.rd*p.ld)/(p.Rmd)
 p.gls= (2*pi*p.rs*p.ls)/(p.Rms)
 
-p.Ri = 50 # Ohm cm : Cytoplasm resistance
+p.Ri = 50/1000 # Ohm cm : Cytoplasm resistance
 
 # Rheobase of soma
 p.rheo = 4.5/1000000000 #nA/1000000: mA: 3.5-6.5
@@ -148,8 +158,9 @@ p.gc = 2 / ( ((p.Ri*p.ld)/(pi*p.rd**2)) + ((p.Ri*p.ls)/(pi*p.rs**2)) )
 p.rn = 1/(p.gls + (p.gld*p.gc)/(p.gld+p.gc) )
 
 # Calculate threshold of soma
-p.threshold = p.rheo*p.rn
-print(p.threshold)
+# p.threshold = p.rheo*p.rn
+p.threshold=0.0005
+# print(p.threshold)
 
 p.Iinj_d = inj
 p.Iinj_s = lambda t: 0
@@ -158,20 +169,36 @@ p.Isyn_d=0
 p.Isyn_s=0
 
 dt=0.1
-tstop=1500
+tstop=2000
 
 # Set capacitances
 p.Cm=1 # Memrane specific capacitance
 p.Cd=2*pi*p.rd*p.ld*p.Cm # dendrite capacitance
 p.Cs=2*pi*p.rs*p.ls*p.Cm # soma capacitance
 
-# sol = odeint(ddt,[0,0],linspace(0,tstop,int(tstop/dt)),args=(p,))
+print("")
+def rk4Step(t,V,dVdt,dt):
+    k1 = dt * dVdt(1,t, V)
+    k2 = dt * dVdt(2,t + 0.5 * dt, V + 0.5 * k1)
+    k3 = dt * dVdt(3,t + 0.5 * dt, V + 0.5 * k2)
+    k4 = dt * dVdt(4,t + dt, V + k3)
+    
+    V = V + (1.0 / 6.0)*(k1 + 2 * k2 + 2 * k3 + k4)
+    
+    t = t + dt
+    return V
 
-sol = solve_ivp(ddt,(0,tstop),[0,0],'RK45',
-                t_eval=linspace(0,tstop,round(tstop/dt)) )
+t=0
+T=[0]
+Vd=[0]
+Vs=[0]
+while t<tstop:
+    [vd,vs] = rk4Step(t,np.array([Vd[-1],Vs[-1]]),ddt,dt)
+    Vd.append(vd)
+    Vs.append(vs)
+    T.append(t)
+    t+=dt
 
-
-plot(sol.t,sol.y[0,:])
-plot(sol.t,sol.y[1,:])
-# plot(sol[:,1])
+plot(np.array(T)/1000,Vd)
+plot(np.array(T)/1000,Vs)
 show()
