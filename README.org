@@ -1,4 +1,4 @@
-* Implenetation of Antidromic Motorunit Model
+* Implementation of Antidromic Motorunit Model
   This is a basic implementation of a compartmental antidromic motor
   unit model based off the work of
 
