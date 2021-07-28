@@ -2,7 +2,7 @@ from math import pi, exp
 import numpy as np
 
 def inj(t):
-    return ((t>1000 and t<2500) or (t>3500 and t<5500))*0.000015#*(sin(t/(2*pi*10)+1))
+    return ((t>1000 and t<2500) or (t>3500 and t<5500))*0.000006#*(sin(t/(2*pi*10)+1))
 
 class PBLIF:
     """A Pulse Based Leaky Integrate and Fire model"""
@@ -11,140 +11,138 @@ class PBLIF:
         # t, Vd, Vs
         self.t=[0]
         self.V=[[0,0]]
+        # default time parameters
+        self.dt=0.1 # ms
+        self.tstop=2000 #ms
         # m,h,n,q
         self.m=[0]
         self.h=[0]
         self.n=[0]
         self.q=[0]
         # values for analytical solution to pulse based ODEs
+        self.t0=0
         self.m0=0
         self.h0=0
         self.n0=0
         self.q0=0
         # Gate pulse parameters
-        self.AM=22
-        self.BM=13
-        self.AH=0.5
-        self.BH=4
-        self.AN=1.5
-        self.BN=0.1
-        self.AQ=1.5
-        self.BQ=0.025
+        self.AM=22    # ms^-1
+        self.BM=13    # ms^-1
+        self.AH=0.5   # ms^-1
+        self.BH=4     # ms^-1
+        self.AN=1.5   # ms^-1
+        self.BN=0.1   # ms^-1
+        self.AQ=1.5   # ms^-1
+        self.BQ=0.025 # ms^-1
+
+        # Physical Dimensions and Measures
+        ### Dendrite
+        # Radius
+        self.rd  = 50/2 # (41.5-62.5)/2 um
+        self.rd/=10000  # convert to cm
+        # Length
+        self.ld  = 6000 # 5519-6789 um
+        self.ld/=10000  # convert to cm
+        # Resistance
+        self.Rmd = 12000 # 10650-14350 Ohm cm^2
+        ### Soma
+        # Radius
+        self.rs  = 80/2 # (77.5-82.5)/2 um
+        self.rs/=10000  # convert to cm
+        # Length
+        self.ls  = 80 # 77.5-82.5 um
+        self.ls/=10000  # convert to cm
+        # Resistance
+        self.Rms = 1100 # 1050-1150 Ohm cm^2
+        ### Cytoplasm
+        # Resistance
+        self.Ri  = 70 # 70 Ohm cm
         
-        # Whether pulse is active
-        self.state=False
-        self.pulseState=True
-        # Start of pulse
-        self.t0=0
+        # Conductances
+        ### Dendrite
+        self.gld = (2*pi*self.rd*self.ld)/(self.Rmd) # Ohm^-1
+        ### Soma
+        self.gls = (2*pi*self.rs*self.ls)/(self.Rms) # Ohm^-1
+        ### Coupling
+        self.gc =  2/( ((self.Ri*self.ld)/(pi*self.rd**2)) +\
+                       ((self.Ri*self.ls)/(pi*self.rs**2)) )  # Ohm^-1
+        ### Sodium
+        self.gNa = 30 # mS/cm^2
+        ### Potassium
+        self.gKf = 4  # mS/cm^2
+        self.gKs = 16 # mS/cm^2
         
-        # Sodium parameters
-        self.ENa=120 # mV equilibrium
-        self.gNa=30e-7  # mS/cm^2maximal conductance
-        
-        # Potassium parameters
-        self.EK=-10  # mV equilibrium
-        self.gKf=4e-7   # mS/cm^2 maximal fast conductance
-        self.gKs=16e-7  # mS/cm^2 maximal slow conductance
-        
-        # Leak parameters
-        self.El=0    # mV equilibrium leak
-        
-        # Resistance of dendrite and soma
-        self.Rmd=12350 #Ohm cm^2
-        self.Rms=1075  #Ohm cm^2
-        # length of dendrite and soma
-        self.ld=5800   #um 5519-6789
-        self.ls=79     #um 77.5-82.5
-        ## Convert units to cm
-        self.ld=self.ld/10000
-        self.ls=self.ls/10000
-        ## End convert units
-        
-        # Radius of dendrite and soma
-        self.rd=79/2   #um 38.75-41.75
-        self.rs=50/2   #um 20.75-31.75
-        ## Convert units to cm
-        self.rd=self.rd/10000
-        self.rs=self.rs/10000
-        ## End convert units
-        
-        # maximal conductance of dendrite and soma
-        self.gld= (2*pi*self.rd*self.ld)/(self.Rmd)
-        self.gls= (2*pi*self.rs*self.ls)/(self.Rms)
-        
-        self.Ri = 70 # Ohm cm : Cytoplasm resistance
-        
-        # Rheobase of soma
-        self.rheo = 4.5/1000000 #nA/1000000: mA: 3.5-6.5
-        
-        # Calculate coupling parameter between soma and dendrite
-        self.gc = 2 / ( ((self.Ri*self.ld)/(pi*self.rd**2)) + ((self.Ri*self.ls)/(pi*self.rs**2)) )
-        
-        # Calculate rn from conductances and coupling:
-        self.rn = 1/(self.gls + (self.gld*self.gc)/(self.gld+self.gc) )
-        
-        # Calculate threshold of soma
-        self.threshold = self.rheo*self.rn
-        print(f"Calculated threshold is : {self.threshold}")
-        self.Iinj_d = inj # Test input Current
+        # Capacitances
+        ### Membrane Capacitance
+        self.Cm = 1  # uF/cm^2
+        self.Cm/=1e3 # convert to milliFarad
+        ### Dendrite Capacitance
+        self.Cd = 2*pi*self.rd*self.ld*self.Cm # mF
+        ### Soma Capacitance
+        self.Cs = 2*pi*self.rs*self.ls*self.Cm # mF
+        # Equilibrium Potentials
+        ### Leak
+        self.El = 0 # mV
+        ### Sodium
+        self.ENa = 120 #mV
+        ### Potassium
+        self.EK = -10 #mV
+
+        # Inputs
+        ### Injected
+        self.Iinj_d = inj
         self.Iinj_s = lambda t: 0
-        
+        ### Synaptic
         self.Isyn_d=0
         self.Isyn_s=0
-        
-        self.dt=0.1
-        self.tstop=2000
-        
-        # Set capacitances
-        self.Cm=1e-3 # uF * e-3 -> mF Memrane specific capacitance
-        self.Cd=2*pi*self.rd*self.ld*self.Cm # dendrite capacitance
-        self.Cs=2*pi*self.rs*self.ls*self.Cm # soma capacitance
 
+        # Rheo and Threshold
+        self.rheo = 4 # 3.5-6.5 nA
+        self.rheo/= 1000000 # Convert to milliamp
+        self.rn   = 1/(self.gld + (self.gls * self.gc)/(self.gls + self.gc))
+        self.threshold = self.rheo*self.rn # Threshold in mV/cm^2
+        ### Pulse state
+        self.pulseState = False
     def ddt(self,slope,t,V):
         # V[0] = dendrite voltage
         # V[1] = Soma Voltage
-        pulseState=True
-        def gateVal(alpha,beta,v0,pulseState):
+        def changeState():
+            self.t0=t
+            self.m0=self.m[-1]
+            self.h0=self.h[-1]
+            self.n0=self.n[-1]
+            self.q0=self.q[-1]
+            self.pulseState = not self.pulseState
+
+        def gateVal(alpha,beta,v0,pulse):
             # public double getValueOn(double t) 
     	    # value = v0 * Math.exp(-beta*(t - t0));
             # public double getValueOff(double t) 
     	    # value = 1 + (v0 - 1) * Math.exp(-alpha*(t - t0));
-            ret = (pulseState)*(v0 * exp(-beta*(t - self.t0))) + \
-                (not pulseState)*(1 + (v0 - 1) * exp(-alpha*(t - self.t0)))
-            return ret
-        if slope==1:
-            if ( self.state ):
-                if(t - self.t0 > 0.6):
-                    self.t0=t
-                    self.m0=self.m[-1]
-                    self.h0=self.h[-1]
-                    self.n0=self.n[-1]
-                    self.q0=self.q[-1]
-                    self.state=False
-                    pulseState=True;
-                else:
-    	            pulseState=False;
+            ret=0;
+            if (pulse):
+                ret = v0 * exp(-beta*(t - self.t0));
             else:
-    	        pulseState=True;
-            
-            if V[1]>self.threshold:
-                self.t0=t
-                self.m0=self.m[-1]
-                self.h0=self.h[-1]
-                self.n0=self.n[-1]
-                self.q0=self.q[-1]
-                self.state = True
+                ret = 1 + (v0 - 1) * exp(-alpha*(t - self.t0));
+            return ret
         
-            self.m.append( gateVal(self.AM,self.BM,self.m0,    pulseState))
-            self.h.append( gateVal(self.AH,self.BH,self.h0,not pulseState))
-            self.n.append( gateVal(self.AN,self.BN,self.n0,    pulseState))
-            self.q.append( gateVal(self.AQ,self.BQ,self.q0,    pulseState))
-
-        m = gateVal(self.AM,self.BM,self.m0,    pulseState)
-        h = gateVal(self.AH,self.BH,self.h0,not pulseState)
-        n = gateVal(self.AN,self.BN,self.n0,    pulseState)
-        q = gateVal(self.AQ,self.BQ,self.q0,    pulseState)
-
+        pulse = self.pulseState
+        if (slope==1):
+            if (V[1]>self.threshold and not pulse):
+                changeState()
+            if (pulse):
+                if (t-self.t0 > 0.6):
+                    changeState()
+            
+        m = gateVal(self.AM,self.BM,self.m0,not pulse)
+        h = gateVal(self.AH,self.BH,self.h0,    pulse)
+        n = gateVal(self.AN,self.BN,self.n0,not pulse)
+        q = gateVal(self.AQ,self.BQ,self.q0,not pulse)
+        if (slope==1):
+            self.m.append(m)
+            self.h.append(h)
+            self.n.append(n)
+            self.q.append(q)
             
         Iion = self.gNa * m**3 * h * (V[1]-self.ENa) +\
                self.gKf * n**4 *     (V[1]-self.EK) +\
