@@ -2,7 +2,7 @@ from math import pi, exp
 import numpy as np
 
 def inj(t):
-    return ((t>1000 and t<1500) or (t>2000 and t<2500))*0.0001#*(sin(t/(2*pi*10)+1))
+    return ((t>1000 and t<2500) or (t>3500 and t<5500))*0.000015#*(sin(t/(2*pi*10)+1))
 
 class PBLIF:
     """A Pulse Based Leaky Integrate and Fire model"""
@@ -39,12 +39,12 @@ class PBLIF:
         
         # Sodium parameters
         self.ENa=120 # mV equilibrium
-        self.gNa=30  # mS/cm^2maximal conductance
+        self.gNa=30e-7  # mS/cm^2maximal conductance
         
         # Potassium parameters
         self.EK=-10  # mV equilibrium
-        self.gKf=4   # mS/cm^2 maximal fast conductance
-        self.gKs=16  # mS/cm^2 maximal slow conductance
+        self.gKf=4e-7   # mS/cm^2 maximal fast conductance
+        self.gKs=16e-7  # mS/cm^2 maximal slow conductance
         
         # Leak parameters
         self.El=0    # mV equilibrium leak
@@ -56,23 +56,23 @@ class PBLIF:
         self.ld=5800   #um 5519-6789
         self.ls=79     #um 77.5-82.5
         ## Convert units to cm
-        self.ld=self.ld/1000
-        self.ls=self.ls/1000
+        self.ld=self.ld/10000
+        self.ls=self.ls/10000
         ## End convert units
         
         # Radius of dendrite and soma
         self.rd=79/2   #um 38.75-41.75
         self.rs=50/2   #um 20.75-31.75
         ## Convert units to cm
-        self.rd=self.ld/1000
-        self.rs=self.ls/1000
+        self.rd=self.rd/10000
+        self.rs=self.rs/10000
         ## End convert units
         
         # maximal conductance of dendrite and soma
         self.gld= (2*pi*self.rd*self.ld)/(self.Rmd)
         self.gls= (2*pi*self.rs*self.ls)/(self.Rms)
         
-        self.Ri = 50 # Ohm cm : Cytoplasm resistance
+        self.Ri = 70 # Ohm cm : Cytoplasm resistance
         
         # Rheobase of soma
         self.rheo = 4.5/1000000 #nA/1000000: mA: 3.5-6.5
@@ -84,10 +84,8 @@ class PBLIF:
         self.rn = 1/(self.gls + (self.gld*self.gc)/(self.gld+self.gc) )
         
         # Calculate threshold of soma
-        # self.threshold = self.rheo*self.rn
-        self.threshold=1
-        # print(self.threshold)
-        
+        self.threshold = self.rheo*self.rn
+        print(f"Calculated threshold is : {self.threshold}")
         self.Iinj_d = inj # Test input Current
         self.Iinj_s = lambda t: 0
         
@@ -98,7 +96,7 @@ class PBLIF:
         self.tstop=2000
         
         # Set capacitances
-        self.Cm=1 # Memrane specific capacitance
+        self.Cm=1e-3 # uF * e-3 -> mF Memrane specific capacitance
         self.Cd=2*pi*self.rd*self.ld*self.Cm # dendrite capacitance
         self.Cs=2*pi*self.rs*self.ls*self.Cm # soma capacitance
 
@@ -111,58 +109,52 @@ class PBLIF:
     	    # value = v0 * Math.exp(-beta*(t - t0));
             # public double getValueOff(double t) 
     	    # value = 1 + (v0 - 1) * Math.exp(-alpha*(t - t0));
-            ret = 0
-            try:
-                ret = (pulseState)*(v0 * exp(-beta*(t - self.t0))) + \
-                    (not pulseState)*(1 + (v0 - 1) * exp(-alpha*(t - self.t0)))
-            except OverflowError:
-                print(f"{alpha}, {beta}, {v0}, {t}, {self.t0}")
-                # if (t>900):
-                # print(t-self.t0)
+            ret = (pulseState)*(v0 * exp(-beta*(t - self.t0))) + \
+                (not pulseState)*(1 + (v0 - 1) * exp(-alpha*(t - self.t0)))
             return ret
         if slope==1:
             if ( self.state ):
                 if(t - self.t0 > 0.6):
                     self.t0=t
-                    self.m0=self.m
-                    self.h0=self.h
-                    self.n0=self.n
-                    self.q0=self.q
+                    self.m0=self.m[-1]
+                    self.h0=self.h[-1]
+                    self.n0=self.n[-1]
+                    self.q0=self.q[-1]
                     self.state=False
-                    # print("State change")
                     pulseState=True;
                 else:
     	            pulseState=False;
             else:
     	        pulseState=True;
             
-        if V[1]>self.threshold:
-            self.t0=t
-            self.m0=self.m
-            self.h0=self.h
-            self.n0=self.n
-            self.q0=self.q
-            self.state = True
+            if V[1]>self.threshold:
+                self.t0=t
+                self.m0=self.m[-1]
+                self.h0=self.h[-1]
+                self.n0=self.n[-1]
+                self.q0=self.q[-1]
+                self.state = True
         
-        self.m = gateVal(self.AM,self.BM,self.m0,pulseState)
-        self.h = gateVal(self.AH,self.BH,self.h0,not pulseState)
-        self.n = gateVal(self.AN,self.BN,self.n0,pulseState)
-        self.q = gateVal(self.AQ,self.BQ,self.q0,pulseState)
-    
-        Iion = self.gNa * self.m**3 * self.h*(V[1]-self.ENa) +\
-               self.gKf * self.n**4 * (V[1]-self.EK) +\
-               self.gKs * self.q**2 * (V[1]-self.EK)
+            self.m.append( gateVal(self.AM,self.BM,self.m0,    pulseState))
+            self.h.append( gateVal(self.AH,self.BH,self.h0,not pulseState))
+            self.n.append( gateVal(self.AN,self.BN,self.n0,    pulseState))
+            self.q.append( gateVal(self.AQ,self.BQ,self.q0,    pulseState))
+
+        m = gateVal(self.AM,self.BM,self.m0,    pulseState)
+        h = gateVal(self.AH,self.BH,self.h0,not pulseState)
+        n = gateVal(self.AN,self.BN,self.n0,    pulseState)
+        q = gateVal(self.AQ,self.BQ,self.q0,    pulseState)
+
+            
+        Iion = self.gNa * m**3 * h * (V[1]-self.ENa) +\
+               self.gKf * n**4 *     (V[1]-self.EK) +\
+               self.gKs * q**2 *     (V[1]-self.EK)
         
         dVdt = np.array([
             (-self.Isyn_d-self.gld*(V[0]-self.El)-self.gc*(V[0]-V[1])+self.Iinj_d(t))/self.Cd,
             (-self.Isyn_s-self.gls*(V[1]-self.El)-self.gc*(V[1]-V[0])-Iion+self.Iinj_s(t))/self.Cs
         ])
     
-        if (dVdt[0]>1e5):
-            print(f"{dVdt[0]}, {Iion}")
-            print(f"{self.m},{self.h},{self.n},{self.q}")
-            print(f"{pulseState}")
-            print("")
         return dVdt
         
     def rk4Step(self):
