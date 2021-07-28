@@ -2,7 +2,7 @@ from math import pi, exp
 import numpy as np
 
 def inj(t):
-    return ((t>1000 and t<2500) or (t>3500 and t<5500))*0.000006#*(sin(t/(2*pi*10)+1))
+    return ((t>1000 and t<2500) or (t>3500 and t<5500))*0.000005#*(sin(t/(2*pi*10)+1))
 
 class PBLIF:
     """A Pulse Based Leaky Integrate and Fire model"""
@@ -19,6 +19,10 @@ class PBLIF:
         self.h=[0]
         self.n=[0]
         self.q=[0]
+        # Ion Currents Over Tie
+        self.INa=[0]
+        self.IKf=[0]
+        self.IKs=[0]
         # values for analytical solution to pulse based ODEs
         self.t0=0
         self.m0=0
@@ -125,29 +129,37 @@ class PBLIF:
             else:
                 ret = 1 + (v0 - 1) * exp(-alpha*(t - self.t0));
             return ret
-        
-        pulse = self.pulseState
         if (slope==1):
-            if (V[1]>self.threshold and not pulse):
+            if (V[1]>self.threshold and not self.pulseState):
                 changeState()
-            if (pulse):
+                
+            if (self.pulseState):
                 if (t-self.t0 > 0.6):
                     changeState()
-            
-        m = gateVal(self.AM,self.BM,self.m0,not pulse)
-        h = gateVal(self.AH,self.BH,self.h0,    pulse)
-        n = gateVal(self.AN,self.BN,self.n0,not pulse)
-        q = gateVal(self.AQ,self.BQ,self.q0,not pulse)
+
+        m = gateVal(self.AM,self.BM,self.m0,not self.pulseState)
+        h = gateVal(self.AH,self.BH,self.h0,    self.pulseState)
+        n = gateVal(self.AN,self.BN,self.n0,not self.pulseState)
+        q = gateVal(self.AQ,self.BQ,self.q0,not self.pulseState)
+
+        iNa = self.gNa * m**3 * h * (V[1]-self.ENa)
+        iKf = self.gKf * n**4 * (V[1]-self.EK)
+        iKs = self.gKs * q**2 * (V[1]-self.EK)
+        Iion = iNa + iKf + iKs
+        
         if (slope==1):
+            # m,h,n,q
             self.m.append(m)
             self.h.append(h)
             self.n.append(n)
             self.q.append(q)
-            
-        Iion = self.gNa * m**3 * h * (V[1]-self.ENa) +\
-               self.gKf * n**4 *     (V[1]-self.EK) +\
-               self.gKs * q**2 *     (V[1]-self.EK)
-        
+            # Currents over time
+            if (iNa>1e50):
+                print(f"{self.gNa} * {m**3} * {h} * ({V[1]}-{self.ENa})")
+            self.INa.append(iNa)
+            self.IKf.append(iKf)
+            self.IKs.append(iKs)
+
         dVdt = np.array([
             (-self.Isyn_d-self.gld*(V[0]-self.El)-self.gc*(V[0]-V[1])+self.Iinj_d(t))/self.Cd,
             (-self.Isyn_s-self.gls*(V[1]-self.El)-self.gc*(V[1]-V[0])-Iion+self.Iinj_s(t))/self.Cs
