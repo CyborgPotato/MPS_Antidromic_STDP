@@ -75,6 +75,12 @@ class PBLIF:
         ### Potassium
         self.gKf = 4  # mS/cm^2
         self.gKs = 16 # mS/cm^2
+        #### UNIT SCALING
+        ### Sodium
+        self.gNa/=10000000 # mS/cm^2
+        ### Potassium
+        self.gKf/=10000000 # mS/cm^2
+        self.gKs/=10000000 # mS/cm^2
         
         # Capacitances
         ### Membrane Capacitance
