@@ -8,6 +8,17 @@ p2 = PBLIF.PBLIF()
 
 p1.Iinj_d = lambda t: 0
 p1.connect(p2)
+p1.connect(p2)
+p1.connect(p2)
+p1.connect(p2)
+p1.connect(p2)
+p1.connect(p2)
+p1.connect(p2)
+p1.connect(p2)
+p1.connect(p2)
+p1.connect(p2)
+p1.connect(p2)
+
 
 while (p1.t[-1]<=p1.tstop):
     p1.rk4Step()

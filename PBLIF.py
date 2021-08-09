@@ -138,6 +138,7 @@ class PBLIF:
             self.m0=self.m[-1]
             self.h0=self.h[-1]
             self.n0=self.n[-1]
+            print(f"{type(self.n0)}")
             self.q0=self.q[-1]
             self.pulseState = not self.pulseState
 
@@ -150,7 +151,11 @@ class PBLIF:
             if (pulse):
                 ret = v0 * exp(-beta*(t - self.t0));
             else:
-                ret = 1 + (v0 - 1) * exp(-alpha*(t - self.t0));
+                # try:
+                    ret = 1 + (v0 - 1) * exp(-alpha*(t - self.t0));
+                # except TypeError:
+                    # print(f"1 + ({type(v0)} - 1) * exp(-{alpha}*({t} - {self.t0}))")
+                
             return ret
         if (slope==1):
             if (V[1]>self.threshold and not self.pulseState):
