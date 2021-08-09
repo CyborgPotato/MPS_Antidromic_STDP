@@ -22,9 +22,12 @@ class PBLIF:
         self.q=[0]
         # Plasticity Weights and parameters
         self.connections = []
+        self.delays      = []
         self.r0          = [] # Last r0 when switching pulse state
-        self.rstate      = [] # current rstate boolean toggle
+        self.rstate      = [] # pulse state of presynapse
         self.weights     = []
+        self.xj          = [] # Presynaptic trace
+        self.yi          = [] # Postsynaptic trace
         # List of times where spikes occurred in Soma and Axon
         self.somaSpike = []
         self.axonSpike = []
@@ -97,7 +100,7 @@ class PBLIF:
         self.gKf/=10000000 # Ohm^-1/cm^2
         self.gKs/=10000000 # Ohm^-1/cm^2
         # Synaptic Conductance
-        self.gSyn=1/1000000
+        self.gSyn=1/10000000
         
         # Capacitances
         ### Membrane Capacitance
@@ -150,10 +153,7 @@ class PBLIF:
             if (pulse):
                 ret = v0 * exp(-beta*(t - self.t0));
             else:
-                # try:
                 ret = 1 + (v0 - 1) * exp(-alpha*(t - self.t0));
-                # except TypeError:
-                    # print(f"1 + ({type(v0)} - 1) * exp(-{alpha}*({t} - {self.t0}))")
             return ret
         if (slope==1):
             if (V[1]>self.threshold and not self.pulseState):
@@ -178,8 +178,14 @@ class PBLIF:
             for idx,syn in enumerate(self.connections):
                 r=0
                 w=self.weights[idx]
-                if len(syn.somaSpike)!=0:
-                    ts = syn.somaSpike[-1]
+                spikeTimes = [time for time in syn.somaSpike\
+                              if time+self.delays[idx]<t\
+                              # Spike has been received\
+                              and\
+                              t-(time+self.delays[idx])<20]
+                              # TODO: tweak spike history
+                for spikeTime in spikeTimes:
+                    ts = spikeTime + self.delays[idx]
                     rs = self.rstate[idx]
                     r0 = self.r0[idx]
                     Tmax = 1  # mM
@@ -201,11 +207,32 @@ class PBLIF:
                             self.rstate[idx]  = False
 
                         r = r0*exp(-beta*(t-(ts+1)))
-                self.Isyn_d=0
+                    ### Update weight
+                    # ya =  1  # Post/After spike
+                    # yb = -1  # Pre/Before spike
+                    # Ap = ya*3e-4 # Potentiation
+                    # Ad = yb*3e-4 # Depression
+                    # # Implemented As Per Pedrosa V, Clopath C (2017)
+                    # # xj = prepostout
+                    # # yi = postpreout
+                    # newSpike=False
+                    # self.xj[idx] = self.xj[idx] -\
+                    #     self.xj[idx]*self.dt/8 +\
+                    #     self.pulseState*1
+                    # self.yi[idx] = self.yi[idx] -\
+                    #     self.yi[idx]*self.dt/8 +\
+                    #     newSpike*1
+                    
+                    # self.weights[idx] = w + self.xj[idx]*self.pulseState*Ad \
+                    #     + self.yi[idx]*newSpike*Ap
+                    # w=self.weights[idx]
+                    # up_bound = 2 # Maximum Weight
+                    # w = w - (w - up_bound)*(w>up_bound) - (w)*(w<0.)
+                    # self.weights[idx] = w
+
                 self.Isyn_d = self.Isyn_d + w * self.gSyn * r * (V[0]-70)
                             # 70 is for excitatory
                             # -16 for inhib
-                # print(f"Synaptic Current: {self.Isyn_d}")
         
         if (slope==1):
             # m,h,n,q
@@ -214,8 +241,6 @@ class PBLIF:
             self.n.append(n)
             self.q.append(q)
             # Currents over time
-            if (iNa>1e50):
-                print(f"{self.gNa} * {m**3} * {h} * ({V[1]}-{self.ENa})")
             self.INa.append(iNa)
             self.IKf.append(iKf)
             self.IKs.append(iKs)
@@ -243,6 +268,9 @@ class PBLIF:
     def connect(self, neuron):
         """Connect axon to dendrite of other neuron"""
         self.connections.append(neuron)
+        self.delays.append(abs(np.random.normal(23,5)))
         self.weights.append(1)
+        self.xj.append(0)
+        self.yi.append(0)
         self.r0.append(0)
         self.rstate.append(True)
