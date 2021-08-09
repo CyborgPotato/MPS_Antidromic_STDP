@@ -86,7 +86,7 @@ class PBLIF:
         self.gc =  2/( ((self.Ri*self.ld)/(pi*self.rd**2)) +\
                        ((self.Ri*self.ls)/(pi*self.rs**2)) )  # Ohm^-1
         ### Sodium
-        self.gNa = 50 # mS/cm^2
+        self.gNa = 35 # mS/cm^2
         ### Potassium
         self.gKf = 4  # mS/cm^2
         self.gKs = 16 # mS/cm^2
@@ -97,7 +97,7 @@ class PBLIF:
         self.gKf/=10000000 # Ohm^-1/cm^2
         self.gKs/=10000000 # Ohm^-1/cm^2
         # Synaptic Conductance
-        self.gSyn=1/10000000
+        self.gSyn=1/1000000
         
         # Capacitances
         ### Membrane Capacitance
@@ -138,7 +138,6 @@ class PBLIF:
             self.m0=self.m[-1]
             self.h0=self.h[-1]
             self.n0=self.n[-1]
-            print(f"{type(self.n0)}")
             self.q0=self.q[-1]
             self.pulseState = not self.pulseState
 
@@ -152,10 +151,9 @@ class PBLIF:
                 ret = v0 * exp(-beta*(t - self.t0));
             else:
                 # try:
-                    ret = 1 + (v0 - 1) * exp(-alpha*(t - self.t0));
+                ret = 1 + (v0 - 1) * exp(-alpha*(t - self.t0));
                 # except TypeError:
                     # print(f"1 + ({type(v0)} - 1) * exp(-{alpha}*({t} - {self.t0}))")
-                
             return ret
         if (slope==1):
             if (V[1]>self.threshold and not self.pulseState):
@@ -177,11 +175,11 @@ class PBLIF:
 
         if slope == 1:
             self.Isyn_d = 0
-            for idx,n in enumerate(self.connections):
+            for idx,syn in enumerate(self.connections):
                 r=0
                 w=self.weights[idx]
-                if len(n.somaSpike)!=0:
-                    ts = n.somaSpike[-1]
+                if len(syn.somaSpike)!=0:
+                    ts = syn.somaSpike[-1]
                     rs = self.rstate[idx]
                     r0 = self.r0[idx]
                     Tmax = 1  # mM
@@ -203,7 +201,7 @@ class PBLIF:
                             self.rstate[idx]  = False
 
                         r = r0*exp(-beta*(t-(ts+1)))
-
+                self.Isyn_d=0
                 self.Isyn_d = self.Isyn_d + w * self.gSyn * r * (V[0]-70)
                             # 70 is for excitatory
                             # -16 for inhib
