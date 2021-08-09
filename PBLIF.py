@@ -1,8 +1,9 @@
-from math import pi, exp
+from math import pi, exp,sin
 import numpy as np
 
 def inj(t):
-    return ((t>1000 and t<2500) or (t>3500 and t<5500))*0.000005#*(sin(t/(2*pi*10)+1))
+    return ((t>250 and t<750) or (t>3500 and t<5500))\
+        *0.000015#*(sin(t/(2*pi)*0.5+1))
 
 class PBLIF:
     """A Pulse Based Leaky Integrate and Fire model"""
@@ -19,6 +20,20 @@ class PBLIF:
         self.h=[0]
         self.n=[0]
         self.q=[0]
+        # Plasticity Weights and parameters
+        self.connections = []
+        self.r0          = [] # Last r0 when switching pulse state
+        self.rstate      = [] # current rstate boolean toggle
+        self.weights     = []
+        # List of times where spikes occurred in Soma and Axon
+        self.somaSpike = []
+        self.axonSpike = []
+        ## A connection consists of another PBLIF and a paired weight value
+        ## weight is pair based and formulation is based upon work by
+        ## https://www.frontiersin.org/articles/10.3389/fnsyn.2016.00038/full
+        ## weights and connections are index matched, post-synapse connection
+        ## is stored in self.connections, presynaptic neuron is self
+        
         # Ion Currents Over Tie
         self.INa=[0]
         self.IKf=[0]
@@ -42,16 +57,16 @@ class PBLIF:
         # Physical Dimensions and Measures
         ### Dendrite
         # Radius
-        self.rd  = 50/2 # (41.5-62.5)/2 um
+        self.rd  = 42/2 # (41.5-62.5)/2 um
         self.rd/=10000  # convert to cm
         # Length
-        self.ld  = 6000 # 5519-6789 um
+        self.ld  = 5600 # 5519-6789 um
         self.ld/=10000  # convert to cm
         # Resistance
         self.Rmd = 12000 # 10650-14350 Ohm cm^2
         ### Soma
         # Radius
-        self.rs  = 80/2 # (77.5-82.5)/2 um
+        self.rs  = 78/2 # (77.5-82.5)/2 um
         self.rs/=10000  # convert to cm
         # Length
         self.ls  = 80 # 77.5-82.5 um
@@ -71,16 +86,18 @@ class PBLIF:
         self.gc =  2/( ((self.Ri*self.ld)/(pi*self.rd**2)) +\
                        ((self.Ri*self.ls)/(pi*self.rs**2)) )  # Ohm^-1
         ### Sodium
-        self.gNa = 30 # mS/cm^2
+        self.gNa = 50 # mS/cm^2
         ### Potassium
         self.gKf = 4  # mS/cm^2
         self.gKs = 16 # mS/cm^2
         #### UNIT SCALING
         ### Sodium
-        self.gNa/=10000000 # mS/cm^2
+        self.gNa/=10000000 # Ohm^-1/cm^2
         ### Potassium
-        self.gKf/=10000000 # mS/cm^2
-        self.gKs/=10000000 # mS/cm^2
+        self.gKf/=10000000 # Ohm^-1/cm^2
+        self.gKs/=10000000 # Ohm^-1/cm^2
+        # Synaptic Conductance
+        self.gSyn=1/10000000
         
         # Capacitances
         ### Membrane Capacitance
@@ -109,7 +126,7 @@ class PBLIF:
         # Rheo and Threshold
         self.rheo = 4 # 3.5-6.5 nA
         self.rheo/= 1000000 # Convert to milliamp
-        self.rn   = 1/(self.gld + (self.gls * self.gc)/(self.gls + self.gc))
+        self.rn   = 1/(self.gls + (self.gld * self.gc)/(self.gld + self.gc))
         self.threshold = self.rheo*self.rn # Threshold in mV/cm^2
         ### Pulse state
         self.pulseState = False
@@ -137,8 +154,8 @@ class PBLIF:
             return ret
         if (slope==1):
             if (V[1]>self.threshold and not self.pulseState):
+                self.somaSpike.append(t)
                 changeState()
-                
             if (self.pulseState):
                 if (t-self.t0 > 0.6):
                     changeState()
@@ -152,6 +169,40 @@ class PBLIF:
         iKf = self.gKf * n**4 * (V[1]-self.EK)
         iKs = self.gKs * q**2 * (V[1]-self.EK)
         Iion = iNa + iKf + iKs
+
+        if slope == 1:
+            self.Isyn_d = 0
+            for idx,n in enumerate(self.connections):
+                r=0
+                w=self.weights[idx]
+                if len(n.somaSpike)!=0:
+                    ts = n.somaSpike[-1]
+                    rs = self.rstate[idx]
+                    r0 = self.r0[idx]
+                    Tmax = 1  # mM
+                    alpha = 2 # msec^-1 mM^-1
+                    beta  = 1 # msec^-1
+                    if t-ts<1:
+                        if not rs:
+                            self.r0[idx] = r0*exp(-beta*(t-(ts+1)))
+                            self.rstate[idx]  = True
+                        
+                        rinf = (alpha*Tmax)/(alpha*Tmax+beta)
+                        taur =  1/(alpha*Tmax+beta)
+                        r    = rinf + (r0-rinf)*exp(-(t-ts)/taur)
+                    else:
+                        if rs:
+                            rinf = (alpha*Tmax)/(alpha*Tmax+beta)
+                            taur =  1/(alpha*Tmax+beta)
+                            self.r0[idx] = rinf + (r0-rinf)*exp(-(t-ts)/taur)
+                            self.rstate[idx]  = False
+
+                        r = r0*exp(-beta*(t-(ts+1)))
+
+                self.Isyn_d = self.Isyn_d + w * self.gSyn * r * (V[0]-70)
+                            # 70 is for excitatory
+                            # -16 for inhib
+                # print(f"Synaptic Current: {self.Isyn_d}")
         
         if (slope==1):
             # m,h,n,q
@@ -186,4 +237,9 @@ class PBLIF:
         self.V.append(V)
         self.t.append(t)
 
-    
+    def connect(self, neuron):
+        """Connect axon to dendrite of other neuron"""
+        self.connections.append(neuron)
+        self.weights.append(1)
+        self.r0.append(0)
+        self.rstate.append(True)
