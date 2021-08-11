@@ -12,6 +12,8 @@ class PBLIF:
         # t, Vd, Vs
         self.t=[0]
         self.V=[[0,0]]
+        # Record internal dynamics?
+        self.record=False
         # default time parameters
         self.dt=0.1 # ms
         self.tstop=2000 #ms
@@ -26,6 +28,7 @@ class PBLIF:
         self.r0          = [] # Last r0 when switching pulse state
         self.rstate      = [] # pulse state of presynapse
         self.weights     = []
+        self.synSpikeTime= []
         self.xj          = [] # Presynaptic trace
         self.yi          = [] # Postsynaptic trace
         # List of times where spikes occurred in Soma and Axon
@@ -208,27 +211,32 @@ class PBLIF:
 
                         r = r0*exp(-beta*(t-(ts+1)))
                     ### Update weight
-                    # ya =  1  # Post/After spike
-                    # yb = -1  # Pre/Before spike
-                    # Ap = ya*3e-4 # Potentiation
-                    # Ad = yb*3e-4 # Depression
-                    # # Implemented As Per Pedrosa V, Clopath C (2017)
-                    # # xj = prepostout
-                    # # yi = postpreout
-                    # newSpike=False
-                    # self.xj[idx] = self.xj[idx] -\
-                    #     self.xj[idx]*self.dt/8 +\
-                    #     self.pulseState*1
-                    # self.yi[idx] = self.yi[idx] -\
-                    #     self.yi[idx]*self.dt/8 +\
-                    #     newSpike*1
+                    ya =  1  # Post/After spike
+                    yb = -1  # Pre/Before spike
+                    Ap = ya*3e-4 # Potentiation
+                    Ad = yb*3e-4 # Depression
+                    # Implemented As Per Pedrosa V, Clopath C (2017)
+                    # xj = prepostout
+                    # yi = postpreout
+                    newSpike=False
+                    lastSpikeTime = self.synSpikeTime[idx]
+                    if ts>lastSpikeTime:
+                        self.synSpikeTime[idx]=ts
+                        newSpike=True
                     
-                    # self.weights[idx] = w + self.xj[idx]*self.pulseState*Ad \
-                    #     + self.yi[idx]*newSpike*Ap
-                    # w=self.weights[idx]
-                    # up_bound = 2 # Maximum Weight
-                    # w = w - (w - up_bound)*(w>up_bound) - (w)*(w<0.)
-                    # self.weights[idx] = w
+                    self.xj[idx] = self.xj[idx] -\
+                        self.xj[idx]*self.dt/8 +\
+                        self.pulseState*1
+                    self.yi[idx] = self.yi[idx] -\
+                        self.yi[idx]*self.dt/8 +\
+                        newSpike*1
+                    
+                    self.weights[idx] = w + self.xj[idx]*newSpike*Ad \
+                        + self.yi[idx]*self.pulseState*Ap
+                    w=self.weights[idx]
+                    up_bound = 2 # Maximum Weight
+                    w = w - (w - up_bound)*(w>up_bound) - (w)*(w<0.)
+                    self.weights[idx] = w
 
                 self.Isyn_d = self.Isyn_d + w * self.gSyn * r * (V[0]-70)
                             # 70 is for excitatory
@@ -236,14 +244,20 @@ class PBLIF:
         
         if (slope==1):
             # m,h,n,q
-            self.m.append(m)
-            self.h.append(h)
-            self.n.append(n)
-            self.q.append(q)
-            # Currents over time
-            self.INa.append(iNa)
-            self.IKf.append(iKf)
-            self.IKs.append(iKs)
+            if (self.record):
+                self.m.append(m)
+                self.h.append(h)
+                self.n.append(n)
+                self.q.append(q)
+                # Currents over time
+                self.INa.append(iNa)
+                self.IKf.append(iKf)
+                self.IKs.append(iKs)
+            else:
+                self.m[-1]=m
+                self.h[-1]=h
+                self.n[-1]=n
+                self.q[-1]=q
 
         dVdt = np.array([
             (-self.Isyn_d-self.gld*(V[0]-self.El)-self.gc*(V[0]-V[1])+self.Iinj_d(t))/self.Cd,
@@ -261,15 +275,19 @@ class PBLIF:
         V = self.V[-1] + (1.0 / 6.0)*(k1 + 2 * k2 + 2 * k3 + k4)
         
         t = self.t[-1] + self.dt
-
-        self.V.append(V)
-        self.t.append(t)
+        if (self.record):
+            self.V.append(V)
+            self.t.append(t)
+        else:
+            self.V[-1]=V
+            self.t[-1]=t
 
     def connect(self, neuron):
         """Connect axon to dendrite of other neuron"""
         self.connections.append(neuron)
-        self.delays.append(abs(np.random.normal(23,5)))
+        self.delays.append(abs(np.random.normal(23,0)))
         self.weights.append(1)
+        self.synSpikeTime.append(0)
         self.xj.append(0)
         self.yi.append(0)
         self.r0.append(0)
