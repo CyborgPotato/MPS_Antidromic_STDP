@@ -31,6 +31,11 @@ class PBLIF:
         self.synSpikeTime= []
         self.xj          = [] # Presynaptic trace
         self.yi          = [] # Postsynaptic trace
+        ### Record weights
+        self.recordCon   = False
+        self.rweights    = [[]]
+        self.rxj         = [[]]
+        self.ryi         = [[]]
         # List of times where spikes occurred in Soma and Axon
         self.somaSpike = []
         self.axonSpike = []

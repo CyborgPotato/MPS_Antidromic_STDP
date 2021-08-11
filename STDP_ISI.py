@@ -1,0 +1,88 @@
+import PBLIF
+import importlib
+importlib.reload(PBLIF)
+from matplotlib.pyplot import *
+import numpy as np
+print()
+tstop = 30e3 #ms
+dt    = 0.1 #ms
+
+Ws = []
+Ts = []
+ISIs = []
+
+dISI = 1
+
+for idx,ISI in enumerate(np.repeat(5,20)):#np.arange(0,10+dISI,dISI)):
+    ISIs.append(ISI)
+    Ws.append([])
+    Ts.append([])
+    SPIKE_FREQ = 100 # Hz
+    prespikes = np.arange(1000/SPIKE_FREQ,tstop,1000/SPIKE_FREQ)
+    postspikes = prespikes + 2*ISI*(np.random.rand(len(prespikes))-0.5)
+
+    lastPre = 0
+    isPre   = False
+    lastPost = 0
+    isPost = False
+
+    a_plus  =  3e-3		# Coefficient related to pre->post activity
+    a_minus = -3e-3	        # Coefficient related to post->pre activity
+    tau1 = 8. 			# [ms] Decay time for pre->post activity
+    tau2 = 8. 			# [ms] Decay time for post->pre activity
+
+    step_tau1 = dt/tau1
+    step_tau2 = dt/tau2
+    
+    xj = 0
+    j  = 0
+    
+    yi = 0
+    i  = 0
+    
+    w  = 0.25
+    t  = 0
+
+    for t in np.arange(t,tstop,dt):
+        isPre=False
+        if i+1 != len(postspikes):
+            if t >= postspikes[i] and lastPost!=postspikes[i]:
+                isPost = True
+                lastPost = postspikes[i]
+                i=i+1
+                
+        if j+1 != len(prespikes):
+            if t >= prespikes[j] and lastPre!=prespikes[j]:
+                isPre = True
+                lastPre = prespikes[j]
+                j=j+1
+                        
+        if t-lastPost > 0.6:
+            isPost = False
+
+        Ws[idx].append(w)
+        Ts[idx].append(t)
+        w = w + xj*isPre*a_minus*dt + yi*isPost*a_plus*dt
+        up_bound = 2.
+        w = w - (w - up_bound)*(w>up_bound) - (w)*(w<0.)
+
+        xj = xj - xj*step_tau2 + isPost*1
+        
+        yi = yi - yi*step_tau1 + isPre*1
+    
+
+delW = []
+for x in range(len(Ws)):
+    plot([T/1000 for T in Ts[x]],Ws[x])
+xlabel("Time (s)")
+ylabel("Synaptic Weight")
+title("Synaptic Weight Over Time")
+show()
+
+# for x in range(len(Ws)):
+#     delW.append( (Ws[x][-1]-Ws[x][0])/(Ts[x][-1]-Ts[x][0]) )
+# scatter(ISIs,delW)
+# title("ΔW vs Interspike Interval")
+# xlabel("ISI (ms)")
+# ylabel("ΔW")
+# show()
