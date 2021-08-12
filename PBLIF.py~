@@ -1,3 +1,0 @@
-class PBLIF:
-    """A Pulse Based Leaky Integrate and Fire model"""
-    
