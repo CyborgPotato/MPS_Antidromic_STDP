@@ -1,5 +1,16 @@
+#+OPTIONS: toc:nil num:nil
 * Implementation of Antidromic Motorunit Model
   This is a basic implementation of a compartmental antidromic motor
   unit model based off the work of
+  cite:cisi08_simul_system_spinal_cord_motor modified to include STDP
+  for long term plasticity based off the work of
+  cite:pedrosa17_role_neurom_cortic_plast.
+
+** Running:
+   To use the model refer to ~main.py~.
+   
+   *Important:* Neurons are connected in reverse
+   i.e. ~neuron1.connect(neuron2)~ connects ~neuron1~ and ~neuron2~ such
+   that ~neuron2~ synapses onto ~neuron1~'s dendrite.
 
   
