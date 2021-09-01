@@ -12,5 +12,3 @@
    *Important:* Neurons are connected in reverse
    i.e. ~neuron1.connect(neuron2)~ connects ~neuron1~ and ~neuron2~ such
    that ~neuron2~ synapses onto ~neuron1~'s dendrite.
-
-  

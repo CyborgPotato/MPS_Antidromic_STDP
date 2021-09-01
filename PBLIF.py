@@ -39,6 +39,11 @@ class PBLIF:
         # List of times where spikes occurred in Soma and Axon
         self.somaSpike = []
         self.axonSpike = []
+        self.axonTime  = 1.5 # ms
+        self.refractoryPeriod = 5 # ms
+        self.axonSpikeTime = -self.refractoryPeriod # This allows for spikes to occur at the beginning of the simulation
+        self.axonRelayed = True # Whether an axonal spike has propogated to the Soma
+        
         ## A connection consists of another PBLIF and a paired weight value
         ## weight is pair based and formulation is based upon work by
         ## https://www.frontiersin.org/articles/10.3389/fnsyn.2016.00038/full
@@ -130,6 +135,7 @@ class PBLIF:
         ### Injected
         self.Iinj_d = inj
         self.Iinj_s = lambda t: 0
+        self.Iinj_a = lambda t: 0
         ### Synaptic
         self.Isyn_d=0
         self.Isyn_s=0
@@ -153,10 +159,6 @@ class PBLIF:
             self.pulseState = not self.pulseState
 
         def gateVal(alpha,beta,v0,pulse):
-            # public double getValueOn(double t) 
-    	    # value = v0 * Math.exp(-beta*(t - t0));
-            # public double getValueOff(double t) 
-    	    # value = 1 + (v0 - 1) * Math.exp(-alpha*(t - t0));
             ret=0;
             if (pulse):
                 ret = v0 * exp(-beta*(t - self.t0));
@@ -280,6 +282,27 @@ class PBLIF:
         V = self.V[-1] + (1.0 / 6.0)*(k1 + 2 * k2 + 2 * k3 + k4)
         
         t = self.t[-1] + self.dt
+
+        # Check for axon current being greater than threshold
+        if (self.Iinj_a(self.t) >=1 and (self.t - self.axonSpikeTime) > self.refractoryPeriod):
+            self.axonSpikeTime = self.t
+            self.axonRelayed = False
+            self.axonSpike.append(self.t)
+        # TODO: Make not dependent upon refractory period i.e. iterate all not processed or cancelled spikes
+        if (self.t > self.axonSpikeTime+self.axonTime):
+            # Ensure soma spike has occured:
+            if (len(self.somaSpike)>0 and self.t > self.somaSpike[-1]+self.refractoryPeriod)\
+               or (len(self.somaSpike)==0):
+                self.somaSpike.append(t)
+                self.t0=t
+                self.m0=self.m[-1]
+                self.h0=self.h[-1]
+                self.n0=self.n[-1]
+                self.q0=self.q[-1]
+                self.pulseState = not self.pulseState
+
+                    
+                
         if (self.record):
             self.V.append(V)
             self.t.append(t)
