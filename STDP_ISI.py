@@ -11,15 +11,17 @@ Ws = []
 Ts = []
 ISIs = []
 
-dISI = 1
+dISI = 0.1
+minISI = -10
+maxISI = 10
 
-for idx,ISI in enumerate(np.repeat(5,20)):#np.arange(0,10+dISI,dISI)):
+for idx,ISI in enumerate(np.arange(minISI,maxISI+dISI,dISI)):
     ISIs.append(ISI)
     Ws.append([])
     Ts.append([])
-    SPIKE_FREQ = 100 # Hz
+    SPIKE_FREQ = 10 # Hz
     prespikes = np.arange(1000/SPIKE_FREQ,tstop,1000/SPIKE_FREQ)
-    postspikes = prespikes + 2*ISI*(np.random.rand(len(prespikes))-0.5)
+    postspikes = prespikes + ISI#2*ISI*(np.random.rand(len(prespikes))-0.5)
 
     lastPre = 0
     isPre   = False
@@ -40,7 +42,7 @@ for idx,ISI in enumerate(np.repeat(5,20)):#np.arange(0,10+dISI,dISI)):
     yi = 0
     i  = 0
     
-    w  = 0.25
+    w  = 1
     t  = 0
 
     for t in np.arange(t,tstop,dt):
@@ -71,18 +73,18 @@ for idx,ISI in enumerate(np.repeat(5,20)):#np.arange(0,10+dISI,dISI)):
         yi = yi - yi*step_tau1 + isPre*1
     
 
+# for x in range(len(Ws)):
+#     plot([T/1000 for T in Ts[x]],Ws[x])
+# xlabel("Time (s)")
+# ylabel("Synaptic Weight")
+# title("Synaptic Weight Over Time")
+# show()
+
 delW = []
 for x in range(len(Ws)):
-    plot([T/1000 for T in Ts[x]],Ws[x])
-xlabel("Time (s)")
-ylabel("Synaptic Weight")
-title("Synaptic Weight Over Time")
+    delW.append( (Ws[x][-1]-Ws[x][0])/(Ts[x][-1]-Ts[x][0]) )
+scatter(ISIs,delW,marker=".")
+title("ΔW vs Interspike Interval")
+xlabel("ISI (ms)")
+ylabel("ΔW")
 show()
-
-# for x in range(len(Ws)):
-#     delW.append( (Ws[x][-1]-Ws[x][0])/(Ts[x][-1]-Ts[x][0]) )
-# scatter(ISIs,delW)
-# title("ΔW vs Interspike Interval")
-# xlabel("ISI (ms)")
-# ylabel("ΔW")
-# show()

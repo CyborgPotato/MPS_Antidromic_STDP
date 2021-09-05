@@ -102,7 +102,7 @@ class PBLIF:
         self.gc =  2/( ((self.Ri*self.ld)/(pi*self.rd**2)) +\
                        ((self.Ri*self.ls)/(pi*self.rs**2)) )  # Ohm^-1
         ### Sodium
-        self.gNa = 35 # mS/cm^2
+        self.gNa = 55 # mS/cm^2
         ### Potassium
         self.gKf = 4  # mS/cm^2
         self.gKs = 16 # mS/cm^2
@@ -245,6 +245,8 @@ class PBLIF:
                     w = w - (w - up_bound)*(w>up_bound) - (w)*(w<0.)
                     self.weights[idx] = w
 
+                #TODO: Make separate dendritic compartments where gSyn[] contains the conductances based on recent spikes presynaptic to them
+                #      acting as a saturation of neuromodulators, look into literature for limits on such
                 self.Isyn_d = self.Isyn_d + w * self.gSyn * r * (V[0]-70)
                             # 70 is for excitatory
                             # -16 for inhib
@@ -270,7 +272,7 @@ class PBLIF:
             (-self.Isyn_d-self.gld*(V[0]-self.El)-self.gc*(V[0]-V[1])+self.Iinj_d(t))/self.Cd,
             (-self.Isyn_s-self.gls*(V[1]-self.El)-self.gc*(V[1]-V[0])-Iion+self.Iinj_s(t))/self.Cs
         ])
-    
+        breakpoint()
         return dVdt
         
     def rk4Step(self):
@@ -284,14 +286,14 @@ class PBLIF:
         t = self.t[-1] + self.dt
 
         # Check for axon current being greater than threshold
-        if (self.Iinj_a(self.t) >=1 and (self.t - self.axonSpikeTime) > self.refractoryPeriod):
+        if (self.Iinj_a(self.t[-1]) >=1 and (self.t[-1] - self.axonSpikeTime) > self.refractoryPeriod):
             self.axonSpikeTime = self.t
             self.axonRelayed = False
             self.axonSpike.append(self.t)
         # TODO: Make not dependent upon refractory period i.e. iterate all not processed or cancelled spikes
-        if (self.t > self.axonSpikeTime+self.axonTime):
+        if (self.t[-1] > self.axonSpikeTime+self.axonTime):
             # Ensure soma spike has occured:
-            if (len(self.somaSpike)>0 and self.t > self.somaSpike[-1]+self.refractoryPeriod)\
+            if (len(self.somaSpike)>0 and self.t[-1] > self.somaSpike[-1]+self.refractoryPeriod)\
                or (len(self.somaSpike)==0):
                 self.somaSpike.append(t)
                 self.t0=t
