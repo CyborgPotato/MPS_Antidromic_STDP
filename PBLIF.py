@@ -41,7 +41,7 @@ class PBLIF:
         self.axonSpike = []
         self.axonTime  = 1.5 # ms
         self.refractoryPeriod = 5 # ms
-        self.axonSpikeTime = -self.refractoryPeriod # This allows for spikes to occur at the beginning of the simulation
+        self.axonSpikeTime = -self.refractoryPeriod-0.1 # This allows for spikes to occur at the beginning of the simulation
         self.axonRelayed = True # Whether an axonal spike has propogated to the Soma
         
         ## A connection consists of another PBLIF and a paired weight value
@@ -250,7 +250,29 @@ class PBLIF:
                 self.Isyn_d = self.Isyn_d + w * self.gSyn * r * (V[0]-70)
                             # 70 is for excitatory
                             # -16 for inhib
-        
+
+            # Check for axon current being greater than threshold            
+            if (self.Iinj_a(self.t[-1]) >=1 \
+                and (self.t[-1] - self.axonSpikeTime) > self.refractoryPeriod):
+                if (self.t[-1] > (self.axonSpikeTime + self.axonTime)):
+                    # Ensure soma spike has occured:
+                    if (len(self.somaSpike)>0 \
+                        and self.t[-1] > self.somaSpike[-1]+self.refractoryPeriod)\
+                        or (len(self.somaSpike)==0):
+                        
+                        self.somaSpike.append(self.t[-1])
+                        self.t0=self.t[-1]
+                        self.m0=self.m[-1]
+                        self.h0=self.h[-1]
+                        self.n0=self.n[-1]
+                        self.q0=self.q[-1]
+                        self.pulseState = not self.pulseState
+                self.axonSpikeTime = self.t[-1]
+                self.axonRelayed = False
+                self.axonSpike.append(self.t[-1])
+                # TODO: Make not dependent upon refractory period i.e.
+                # iterate all not processed or cancelled spikes
+
         if (slope==1):
             # m,h,n,q
             if (self.record):
@@ -284,26 +306,6 @@ class PBLIF:
         
         t = self.t[-1] + self.dt
 
-        # # Check for axon current being greater than threshold
-        # if (self.Iinj_a(self.t[-1]) >=1 and (self.t[-1] - self.axonSpikeTime) > self.refractoryPeriod):
-        #     self.axonSpikeTime = self.t
-        #     self.axonRelayed = False
-        #     self.axonSpike.append(self.t)
-        # # TODO: Make not dependent upon refractory period i.e. iterate all not processed or cancelled spikes
-        # if (self.t[-1] > self.axonSpikeTime+self.axonTime):
-        #     # Ensure soma spike has occured:
-        #     if (len(self.somaSpike)>0 and self.t[-1] > self.somaSpike[-1]+self.refractoryPeriod)\
-        #        or (len(self.somaSpike)==0):
-        #         self.somaSpike.append(t)
-        #         self.t0=t
-        #         self.m0=self.m[-1]
-        #         self.h0=self.h[-1]
-        #         self.n0=self.n[-1]
-        #         self.q0=self.q[-1]
-        #         self.pulseState = not self.pulseState
-
-                    
-                
         if (self.record):
             self.V.append(V)
             self.t.append(t)
