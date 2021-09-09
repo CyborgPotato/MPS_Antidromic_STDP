@@ -6,7 +6,9 @@ from matplotlib.pyplot import *
 p1 = PBLIF.PBLIF()
 p1.record=True
 
-p1.Iinj_d = lambda t: 10/1000000*(t>500)*(t<1500)
+p1.Iinj_d = lambda t: 100/1000000*(t>=250)*(t<=251)
+p1.Iinj_s = lambda t: 10/1000000*(t>=150)*(t<=151)
+p1.Iinj_a = lambda t: 50*(t>=50)*(t<=51)
 
 p1.tstop = 2000
 
